@@ -140,6 +140,8 @@ details summary{cursor:pointer;font-family:var(--display);font-size:1.15rem}
     <button id="wPrev" aria-label="Previous note">◀ Back</button>
     <button id="wPlay" class="play">Play</button>
     <button id="wNext" aria-label="Next note">Next ▶</button>
+    <button id="wFlip2">Switch hand</button>
+    <button id="wSpot2">Other spot</button>
     <label>Tempo <input type="range" id="wTempo" min="30" max="200" step="2"> <span class="tempo" id="wTempoVal"></span></label>
     <label><input type="checkbox" id="wLoop"> Loop bars <input type="number" id="wFrom" min="1" value="1"> to <input type="number" id="wTo" min="1" value="2"></label>
   </div>
@@ -180,10 +182,17 @@ details summary{cursor:pointer;font-family:var(--display);font-size:1.15rem}
       <div class="row"><span class="label">Alternation</span><div class="btns" id="wAlt"></div></div>
       <div class="row"><span class="label">Octave</span><div class="btns" id="wOct"></div></div>
       <div class="row"><span class="label">My tunes · saved in this browser</span><div class="btns" id="wLib"></div></div>
+      <div class="row"><div class="btns"><button id="wBackup" aria-pressed="false">Back up or restore my tunes</button></div></div>
+      <div class="row" id="bkPanel" hidden>
+        <p class="status">This text holds every saved tune with your hammering changes, and your tuning. Copy it somewhere safe, such as a note or an email to yourself. To restore, paste a backup here and press Restore. Restoring adds to your list and replaces tunes with the same name.</p>
+        <textarea id="bkText" spellcheck="false" aria-label="Backup text" style="min-height:120px"></textarea>
+        <div class="btns"><button id="bkCopy">Copy</button><button id="bkRestore">Restore from this text</button></div>
+        <p class="status" id="bkMsg"></p>
+      </div>
     </div>
     <details>
       <summary>Add or edit a tune in ABC notation</summary>
-      <p class="status">Paste a tune from The Session or anywhere else that gives ABC, then load it. It joins your tunes. Chord symbols in quotes, like "G" or "D7", are used for the backup.</p>
+      <p class="status">Paste a tune from The Session or anywhere else that gives ABC, then load it. It joins your tunes. Chord symbols in quotes, like "G", "D7" or "G/B", are used for the backup. A paste with several tunes, each starting with X:, adds each one separately.</p>
       <textarea id="abcText" spellcheck="false" aria-label="Tune in ABC notation"></textarea>
       <div class="btns" style="margin-top:8px"><button id="wLoad">Load tune</button><button id="wRemove">Remove this tune from my list</button></div>
       <p class="status warn" id="wErr"></p>
@@ -194,7 +203,7 @@ details summary{cursor:pointer;font-family:var(--display);font-size:1.15rem}
       <div class="note"><h2>Alternation</h2>
         <p>Counting long notes keeps both hands on the eighth-note pulse. A quarter note takes up two strokes, the second one silent, so the lead hand always falls on the beat and both passes of a repeat are hammered the same way. Every note played alternates strictly, so long notes don't count.</p></div>
       <div class="note"><h2>Backup</h2>
-        <p>The backup follows the tune's chord symbols when it has them. Otherwise the page suggests a chord for each half bar from the melody notes, favoring the home chord and keeping a chord when the melody allows. Bass and chord puts a bass note on the beat and a two-note chord off the beat. Shed rolls run root, third, fifth and octave in eighth notes.</p></div>
+        <p>The backup follows the tune's chord symbols when it has them. Otherwise the page suggests a chord for each half bar from the melody notes, favoring the home chord and keeping a chord when the melody allows. Bass and chord puts a bass note on the beat and a two-note chord off the beat. Shed rolls run root, third, fifth and octave in eighth notes. A seventh chord puts its seventh into both patterns, and a slash chord such as G/B puts its named note in the bass.</p></div>
       <div class="note"><h2>Harmony</h2>
         <p>The harmony note is struck with the melody note on each beat, by the other hand. Thirds and sixths follow the key, so they come out major or minor as the scale gives them. A fifth below is often straight across the treble bridge from the melody note.</p></div>
     </section>
@@ -308,10 +317,10 @@ function draw(){
     const pc=c.midi%12,ro=(c.on&&mode==='chords')?role(pc):null,inKey=mode==='walk'?walkUsed.has(c.midi):sp.includes(pc);
     const g=el('g',{class:'cell',tabindex:c.on?0:-1,role:'button','aria-label':`${nm(pc)}${Math.floor(c.midi/12)-1}`});
     const fill=!c.on?'var(--off)':ro?`var(--${ro})`:inKey?'var(--scale)':'var(--panel)';
-    const ink=!c.on?'var(--off-ink)':ro?'#fff':inKey?'var(--scale-ink)':'var(--off-ink)';
+    const ink=!c.on?'var(--off-ink)':ro?'#fff':inKey?'var(--scale-ink)':'var(--muted)';
     el('circle',{cx:X[c.col],cy:Y(c.row),r:15,fill,stroke:ro?'none':'var(--line)','stroke-width':1},g);
     el('text',{x:X[c.col],y:Y(c.row)+5,'text-anchor':'middle','font-size':14,'font-weight':ro?700:500,fill:ink},g).textContent=nm(pc);
-    el('text',{x:X[c.col]+22,y:Y(c.row)+4,'font-size':10,fill:'var(--muted)',opacity:c.on?.8:.35},g).textContent=Math.floor(c.midi/12)-1;
+    el('text',{x:X[c.col]+21,y:Y(c.row)+5,'font-size':12,'font-weight':500,fill:'var(--muted)',opacity:c.on?1:.4},g).textContent=Math.floor(c.midi/12)-1;
     const isSel=sel&&sel.row===c.row&&((sel.k==='B')===(c.col==='B'));
     if(isSel)el('circle',{cx:X[c.col],cy:Y(c.row),r:20,fill:'none',stroke:'var(--ink)','stroke-width':2,'stroke-dasharray':'4 3'},g);
     const act=()=>{if(editing){sel={k:c.col==='B'?'B':'T',row:c.row};draw();editInfo();}pluck(c.midi)};
@@ -419,7 +428,7 @@ function lenOf(a,sl,b){const num=a?+a:1;let den=1;if(sl.length)den=b?+b:Math.pow
 
 function parseABC(src){
   const items=[];let title='',L=null,num=4,den=4,K=keyInfo('C'),inBody=false,pos=0;
-  let bar=1,barHas=false,barAcc={},tuplet=null,tie=false,broken=1,last=null;
+  let bar=1,barHas=false,barAcc={},tuplet=null,tie=false,broken=1,last=null,lastBar=null;
   const NOTE=/^(\^{1,2}|_{1,2}|=)?([A-Ga-g])([',]*)(\d*)(\/*)(\d*)/;
   function pitch(acc,letter,marks){
     let midi=60+LET[letter.toUpperCase()]+(letter===letter.toLowerCase()?12:0);
@@ -432,7 +441,10 @@ function parseABC(src){
   function emit(type,midi,d,start,end){
     if(tuplet){d*=tuplet.f;if(--tuplet.n<=0)tuplet=null;}
     if(broken!==1){d*=broken;broken=1;}
-    if(type==='note'&&tie&&last&&last.type==='note'&&last.midi===midi){last.dur+=d;tie=false;return;}
+    if(type==='note'&&tie&&last&&last.type==='note'&&last.midi===midi){last.dur+=d;tie=false;
+      // a tie across a bar line pushes the next bar's first note later by the tied amount
+      if(last.bar!==bar&&lastBar){lastBar.carry=(lastBar.carry||0)+d;barHas=true;}
+      return;}
     tie=false;last={type,midi,dur:d,start,end,bar};items.push(last);barHas=true;
   }
   for(const raw of src.split('\n')){
@@ -452,11 +464,12 @@ function parseABC(src){
       if(ch==='%')break;
       if(' \t\\`y'.includes(ch)){i++;continue;}
       if(ch==='"'){const j=s.indexOf('"',i+1);const txt=s.slice(i+1,j<0?s.length:j).trim();i=j<0?s.length:j+1;
-        const cm=txt.match(/^([A-G])([#b♯♭]?)(maj|min|m|dim|°)?/);
+        const cm=txt.match(/^([A-G])([#b♯♭]?)([^\/]*)(?:\/([A-G])([#b♯♭]?))?/);
         if(cm&&!/^[\^_<>@]/.test(txt)){
-          const root=(LET[cm[1]]+(/[#♯]/.test(cm[2])?1:/[b♭]/.test(cm[2])?-1:0)+12)%12;
-          const q=cm[3]==='m'||cm[3]==='min'?'m':(cm[3]==='dim'||cm[3]==='°')?'°':'';
-          items.push({type:'chord',name:txt,root,q});}
+          const pc=(l,a)=>(LET[l]+(/[#♯]/.test(a)?1:/[b♭]/.test(a)?-1:0)+12)%12;
+          const qt=cm[3]||'';
+          const q=/^(maj7|M7|Δ)/.test(qt)?'maj7':/^(m7|min7|-7)/.test(qt)?'m7':/^(dim|°|o)/.test(qt)?'°':/^(m|min|-)(?!aj)/.test(qt)?'m':/7|9|11|13/.test(qt)?'7':'';
+          items.push({type:'chord',name:txt,root:pc(cm[1],cm[2]),q,bass:cm[4]?pc(cm[4],cm[5]):null});}
         continue;}
       if(ch==='!'||ch==='+'){const j=s.indexOf(ch,i+1);i=j<0?s.length:j+1;continue;}
       if(ch==='{'){const j=s.indexOf('}',i+1);i=j<0?s.length:j+1;continue;}
@@ -485,7 +498,7 @@ function parseABC(src){
         if(barHas){bar++;barHas=false;}
         barAcc={};
         if(run.startsWith(':'))items.push({type:'end'});
-        items.push({type:'bar',bar});
+        lastBar={type:'bar',bar};items.push(lastBar);
         if(run.endsWith(':'))items.push({type:'start'});
         if(/\d/.test(s[i]||'')){items.push({type:'ending',n:+s[i]});i++;while(/[\d,\-]/.test(s[i]||''))i++;}
         continue;
@@ -517,7 +530,7 @@ function expand(P){
       if(pass===2&&it.n===1){let j=i+1;while(j<items.length&&items[j].type!=='ending')j++;i=j;newBar();continue;}
       if(it.n>=2){pass=1;repStart=i+1;}
       i++;continue;}
-    if(it.type==='bar'){newBar();inFirst=it.bar===1;i++;continue;}
+    if(it.type==='bar'){newBar();barTime=it.carry||0;inFirst=it.bar===1;i++;continue;}
     if(it.type==='chord'){pend=it;i++;continue;}
     if(it.type==='note'||it.type==='rest'){
       const bt=barTime+(it.bar===1&&inFirst?P.pickup:0);
@@ -536,7 +549,7 @@ function expand(P){
 
 // ----- chords -----
 const nmK=pc=>(walkFlat?FL:N)[pc];
-const chordName=c=>c?nmK(c.root)+(c.q==='°'?'°':c.q):'';
+const chordName=c=>c?nmK(c.root)+c.q+(c.bass!=null&&c.bass!==c.root?'/'+nmK(c.bass):''):'';
 function suggest(){
   segs=[];const sc=MAJ.map(i=>(P.major+i)%12),qs=['','m','m','','','m'];
   const tri=sc.slice(0,6).map((r,d)=>({root:r,q:qs[d]}));let prev=null;
@@ -568,14 +581,16 @@ function makeBackup(){
     for(let k=0;;k++){
       const bt=o.start+k*b;if(bt>=o.end-1e-9)break;if(bt<o.first-1e-9)continue;
       const ch=chordAt(bt);if(!ch)continue;
-      const iv=QUAL[ch.q],r=up(ch.root,55),rb=up(ch.root,50);
-      const deg={1:r,3:r+iv[1],5:r+iv[2],8:r+12},bass5=rb+7<=62?rb+7:rb-5;
+      const iv=QUAL[ch.q],r=up(ch.root,55),slash=ch.bass!=null&&ch.bass!==ch.root,rb=up(slash?ch.bass:ch.root,50);
+      // a seventh chord puts its seventh where the octave or the fifth would go
+      const deg={1:r,3:r+iv[1],5:r+iv[2],8:iv[3]!=null?r+iv[3]:r+12},top=iv[3]!=null?r+iv[3]:r+iv[2];
+      const bass5=slash?rb:(rb+7<=62?rb+7:rb-5);
       const ev=(dt,dur,midi,extra,fh)=>out.push({b:true,midi,extra,dur,t:bt+dt,barTime:bt+dt-o.start,bar:o.bar,occ:o.idx,fixedHand:fh,chord:ch});
       if(W.bstyle==='boom'){
-        if(comp){ev(0,2*e,k%2===0?rb:bass5,null,'R');ev(2*e,e,deg[5],deg[3],'L');}
-        else if(P.num===3){if(k===0)ev(0,b,rb,null,'R');else ev(0,b,deg[5],deg[3],'L');}
+        if(comp){ev(0,2*e,k%2===0?rb:bass5,null,'R');ev(2*e,e,top,deg[3],'L');}
+        else if(P.num===3){if(k===0)ev(0,b,rb,null,'R');else ev(0,b,top,deg[3],'L');}
         else if(k%2===0)ev(0,b,k%4===0?rb:bass5,null,'R');
-        else ev(0,b,deg[5],deg[3],'L');
+        else ev(0,b,top,deg[3],'L');
       }else{
         if(comp){(k%2===0?[1,3,5]:[8,5,3]).forEach((d,j)=>ev(j*e,e,deg[d],null,null));}
         else{const n=Math.max(1,Math.round(b/e));for(let j=0;j<n;j++)ev(j*e,e,deg[[1,3,5,8][(k*n+j)%4]],null,null);}
@@ -614,45 +629,45 @@ const dist=(p,q)=>Math.hypot(XU[p.col]-XU[q.col],p.row-q.row);
 const crossed=(h,p,o)=>{const lp=h==='L'?p:o,rp=h==='L'?o:p;return XU[lp.col]>XU[rp.col];};
 function placeAll(){
   const C=cells(),n=steps.length;if(!n)return;
-  const cand=steps.map(s=>{
-    const mi=midiOf(s);
-    let ps=C.filter(c=>c.midi===mi).map(c=>({col:c.col,row:c.row,midi:mi}));
+  const spots=mi=>C.filter(c=>c.midi===mi).map(c=>({col:c.col,row:c.row,midi:mi}));
+  // every way to strike each step: the main note's spot, plus a spot for any harmony note
+  const opts=steps.map(s=>{
+    let ps=spots(midiOf(s));
     const ov=W.spot[s.key];
     if(ov){const f=ps.filter(p=>p.col+p.row===ov);if(f.length)ps=f;}
-    return ps.length?ps:[null];
+    s.cands=ps.slice();
+    if(!ps.length)ps=[null];
+    const xs=s.extra!=null?spots(s.extra):[],out=[];
+    for(const p of ps){
+      if(p&&xs.length){for(const x of xs)if(!(x.col===p.col&&x.row===p.row))out.push({p,x});}
+      else out.push({p,x:null});
+    }
+    return out.length?out:[{p:ps[0],x:null}];
   });
+  const key=p=>p?p.col+p.row:'-';
   const bias=p=>p&&p.col==='B'&&!steps[0].b?0.6:0;
-  let states=cand[0].map((p,b)=>({a:-1,b,cost:bias(p),back:null}));
-  for(let i=1;i<n;i++){
-    const next=[],hi=steps[i].hand,h1=steps[i-1].hand,h2=i>=2?steps[i-2].hand:null;
-    cand[i].forEach((c,ci)=>{
-      const best=new Map();
-      for(const st of states){
-        const pb=cand[i-1][st.b],pa=i>=2&&st.a>=0?cand[i-2][st.a]:null;
-        let same=null,other=null;
-        if(h1===hi){same=pb;if(h2&&h2!==hi)other=pa;}
-        else{other=pb;if(h2===hi)same=pa;}
-        let cost=st.cost+bias(c);
-        if(c&&same)cost+=dist(same,c);
-        if(c&&other&&crossed(hi,c,other))cost+=5;
-        const prev=best.get(st.b);
-        if(!prev||prev.cost>cost)best.set(st.b,{a:st.b,b:ci,cost,back:st});
+  // Viterbi search; the state is where each hand last struck, so travel and crossing
+  // are judged for both hands however the strokes alternate
+  let layer=new Map([['-|-',{cost:0,R:null,L:null,back:null,o:null}]]);
+  for(let i=0;i<n;i++){
+    const h=steps[i].hand,oh=opp(h),next=new Map();
+    for(const st of layer.values()){
+      for(const o of opts[i]){
+        let cost=st.cost+bias(o.p);const pos={R:st.R,L:st.L};
+        if(o.p){if(pos[h])cost+=dist(pos[h],o.p);pos[h]=o.p;}
+        if(o.x){if(pos[oh])cost+=dist(pos[oh],o.x);pos[oh]=o.x;}
+        if(pos.L&&pos.R&&XU[pos.L.col]>XU[pos.R.col])cost+=5;
+        const k=key(pos.R)+'|'+key(pos.L),prev=next.get(k);
+        if(!prev||prev.cost>cost)next.set(k,{cost,R:pos.R,L:pos.L,back:st,o});
       }
-      best.forEach(v=>next.push(v));
-    });
-    states=next;
+    }
+    layer=next;
   }
-  let bst=states.reduce((x,y)=>y.cost<x.cost?y:x);
-  for(let i=n-1;i>=0;i--){steps[i].pos=cand[i][bst.b];steps[i].cands=cand[i].filter(Boolean);bst=bst.back;}
-  steps.forEach(s=>{
-    s.xpos=null;if(s.extra==null||!s.pos)return;
-    const xh=opp(s.hand);let best=null,bc=1e9;
-    C.filter(c=>c.midi===s.extra).forEach(c=>{const p={col:c.col,row:c.row,midi:c.midi};
-      if(p.col===s.pos.col&&p.row===s.pos.row)return;
-      const cost=dist(p,s.pos)+(crossed(xh,p,s.pos)?5:0);if(cost<bc){bc=cost;best=p;}});
-    s.xpos=best;
-  });
+  let bst=[...layer.values()].reduce((x,y)=>y.cost<x.cost?y:x);
+  for(let i=n-1;i>=0;i--){steps[i].pos=bst.o.p;steps[i].xpos=bst.o.x;bst=bst.back;}
 }
+// where hand h last struck before step i: its own notes, or harmony notes it played
+function handBefore(h,i){for(let j=i-1;j>=0;j--){const s=steps[j];if(s.hand===h&&s.pos)return{p:s.pos,j};if(s.hand!==h&&s.xpos)return{p:s.xpos,j};}return null;}
 
 // ----- trouble spots -----
 function gapWords(g){return g<=0.5?'a sixteenth note':g<=1?'an eighth note':g<=2?'a quarter note':`${g} eighth notes`;}
@@ -660,17 +675,16 @@ function trouble(){
   const res={};
   steps.forEach((s,i)=>{
     if(!s.pos)return;
-    let j=i-1;while(j>=0&&!(steps[j].hand===s.hand&&steps[j].pos))j--;
-    if(j<0)return;
-    const p=steps[j],g=Math.max(Math.round((s.t-p.t)*16)/2,0.5),d=dist(p.pos,s.pos);
+    const hb=handBefore(s.hand,i);if(!hb)return;
+    const p={pos:hb.p,t:steps[hb.j].t},g=Math.max(Math.round((s.t-p.t)*16)/2,0.5),d=dist(p.pos,s.pos);
     let score=d/g,why=null;
     if(d>0.01&&score>=1){
       const a=p.pos,b=s.pos,rows=Math.abs(a.row-b.row);
       const where=a.col===b.col?'':(a.col==='B'||b.col==='B')?(b.col==='B'?' down to the bass':' from the bass to the treble'):' across the treble bridge';
       why=`${Hw(s.hand)} hand jumps from ${lab(a.midi)} to ${lab(b.midi)}${where}${rows>1?`, ${rows} courses`:''} in ${gapWords(g)}`;
     }
-    let k=i-1;while(k>=0&&!(steps[k].hand!==s.hand&&steps[k].pos))k--;
-    if(k>=0&&crossed(s.hand,s.pos,steps[k].pos)){score+=2;why=`Hands cross: the ${hw(s.hand)} hand reaches past the ${hw(opp(s.hand))} for ${lab(s.pos.midi)}`;}
+    const ob=handBefore(opp(s.hand),i);
+    if(ob&&crossed(s.hand,s.pos,ob.p)){score+=2;why=`Hands cross: the ${hw(s.hand)} hand reaches past the ${hw(opp(s.hand))} for ${lab(s.pos.midi)}`;}
     if(steps[i-1]&&steps[i-1].hand===s.hand&&g<=1&&!s.fixedHand){score+=1.5;why=why||`${Hw(s.hand)} hand plays twice in a row, ${lab(p.pos.midi)} then ${lab(s.pos.midi)}`;}
     if(!why)return;
     const r=res[s.bar];if(!r||r.score<score)res[s.bar]={score,why,bar:s.bar,i};
@@ -704,6 +718,7 @@ function loadTune(){
   stop();
   P=parseABC(W.abc);
   tuneTitle=P.title||'Untitled tune';walkFlat=P.flat;
+  if(!W.curKey)W.curKey=uniqueKey(tuneTitle);
   const E=expand(P);melody=E.steps;marks=E.marks;occs=E.occs;steps=melody;cur=0;
   suggest();
   document.getElementById('wTitle').textContent=tuneTitle;
@@ -812,7 +827,7 @@ function walkReadout(){
     (s.xpos?` · ${lab(s.xpos.midi)} with the ${hw(opp(s.hand))} hand`:'')+((W.shapes||W.part==='backup')&&ch?` · chord ${chordName(ch)}`:'');
   cw.textContent=s.pos?'':'Not on your dulcimer as tuned';
 }
-function lastPos(h,before){for(let j=before;j>=0;j--)if(steps[j].hand===h&&steps[j].pos)return steps[j].pos;return null;}
+function lastPos(h,before){const r=handBefore(h,before+1);return r?r.p:null;}
 function walkShapes(C){
   const s=steps[cur];if(!W.shapes||!s)return;
   const ch=s.chord||chordAt(s.t);if(!ch)return;
@@ -937,26 +952,65 @@ function walkControls(){
   document.getElementById('harmRow').hidden=W.part!=='melody';
   document.getElementById('otherRow').hidden=W.solo==='both';
 }
-document.getElementById('wFlip').onclick=()=>{const s=steps[cur];if(!s)return;W.hand[s.key]=opp(s.hand);recompute();};
-document.getElementById('wSpot').onclick=()=>{const s=steps[cur];if(!s||!s.pos)return;
+function flipHand(){const s=steps[cur];if(!s)return;stop();W.hand[s.key]=opp(s.hand);recompute();}
+document.getElementById('wFlip').onclick=document.getElementById('wFlip2').onclick=flipHand;
+function otherSpot(){const s=steps[cur];if(!s||!s.pos)return;stop();
   const mi=midiOf(s),cs=cells().filter(c=>c.midi===mi).map(c=>({col:c.col,row:c.row,midi:mi}));
   if(cs.length<2){document.getElementById('wStatus').textContent=`${lab(mi)} has only one spot on your dulcimer.`;return;}
   const k=cs.findIndex(p=>p.col===s.pos.col&&p.row===s.pos.row),nx=cs[(k+1)%cs.length];
-  W.spot[s.key]=nx.col+nx.row;recompute();pluck(nx.midi);};
+  W.spot[s.key]=nx.col+nx.row;recompute();pluck(nx.midi);}
+document.getElementById('wSpot').onclick=document.getElementById('wSpot2').onclick=otherSpot;
 document.getElementById('wClear').onclick=()=>{steps.forEach(s=>{delete W.hand[s.key];delete W.spot[s.key];});recompute();};
 
 // ----- my tunes -----
-function stash(){if(!tuneTitle||!melody.length)return;W.lib[tuneTitle]={abc:W.abc,hand:W.hand,spot:W.spot};}
+function uniqueKey(t){
+  const free=k=>!W.lib[k]||W.lib[k].abc===W.abc;
+  if(free(t))return t;let n=2;while(!free(`${t} (${n})`))n++;return `${t} (${n})`;
+}
+function stash(){if(!W.curKey||!melody.length)return;W.lib[W.curKey]={abc:W.abc,hand:W.hand,spot:W.spot};}
+function openTune(k){stash();const e=W.lib[k];W.curKey=k;W.abc=e.abc;W.hand=e.hand||{};W.spot=e.spot||{};loadTune();}
 function renderLib(){
   const Lb=document.getElementById('wLib');Lb.innerHTML='';
-  Object.keys(W.lib).sort().forEach(t=>btn(Lb,t.replace(/</g,'&lt;'),t===tuneTitle,()=>{
-    if(t===tuneTitle)return;stash();const e=W.lib[t];W.abc=e.abc;W.hand=e.hand||{};W.spot=e.spot||{};loadTune();}));
+  Object.keys(W.lib).sort().forEach(k=>btn(Lb,k.replace(/&/g,'&amp;').replace(/</g,'&lt;'),k===W.curKey,()=>{if(k!==W.curKey)openTune(k);}));
 }
-document.getElementById('wLoad').onclick=()=>{stash();W.abc=document.getElementById('abcText').value;W.hand={};W.spot={};loadTune();};
+document.getElementById('wLoad').onclick=()=>{
+  const txt=document.getElementById('abcText').value;
+  const parts=txt.split(/(?=^\s*X:)/m).map(t=>t.trim()).filter(t=>/^\s*K:/m.test(t));
+  stash();
+  if(parts.length<=1){W.curKey=null;W.abc=txt;W.hand={};W.spot={};loadTune();return;}
+  // a pasted collection becomes one saved tune per X: entry
+  let firstKey=null;
+  for(const t of parts){
+    const ti=((t.match(/^\s*T:\s*(.*)$/m)||[])[1]||'Untitled tune').trim();
+    W.abc=t;const k=uniqueKey(ti);W.lib[k]={abc:t,hand:{},spot:{}};if(!firstKey)firstKey=k;
+  }
+  W.curKey=null;openTune(firstKey);
+  document.getElementById('wErr').textContent=`Added ${parts.length} tunes to My tunes. Showing the first.`;
+};
 document.getElementById('wRemove').onclick=()=>{
-  delete W.lib[tuneTitle];const ks=Object.keys(W.lib);
-  if(ks.length){const e=W.lib[ks[0]];W.abc=e.abc;W.hand=e.hand||{};W.spot=e.spot||{};}else{W.abc=DEFAULT_ABC;W.hand={};W.spot={};}
-  tuneTitle='';loadTune();};
+  delete W.lib[W.curKey];const ks=Object.keys(W.lib).sort();W.curKey=null;
+  if(ks.length){openTune(ks[0]);}else{W.abc=DEFAULT_ABC;W.hand={};W.spot={};loadTune();}
+};
+const bkText=document.getElementById('bkText'),bkMsg=document.getElementById('bkMsg');
+document.getElementById('wBackup').onclick=e=>{
+  const pnl=document.getElementById('bkPanel'),open=pnl.hidden;pnl.hidden=!open;e.currentTarget.setAttribute('aria-pressed',open);
+  if(open){stash();bkText.value=JSON.stringify({app:'dulcimer-maps',saved:new Date().toISOString().slice(0,10),tunes:W.lib,tuning:{treble:T,bass:B}});bkMsg.textContent='';}
+};
+document.getElementById('bkCopy').onclick=()=>{
+  const done=()=>{bkMsg.textContent='Copied. Paste it into a note or an email to yourself.';};
+  const fallback=()=>{bkText.focus();bkText.select();bkMsg.textContent='Selected. Use your device\u2019s Copy to finish.';};
+  try{navigator.clipboard.writeText(bkText.value).then(done,fallback);}catch(e){fallback();}
+};
+document.getElementById('bkRestore').onclick=()=>{
+  let d;try{d=JSON.parse(bkText.value);}catch(e){bkMsg.textContent='That text isn\u2019t a backup from this page. Paste the whole backup, from the first { to the last }.';return;}
+  if(!d||typeof d.tunes!=='object'){bkMsg.textContent='No tunes found in that backup.';return;}
+  let n=0;for(const k in d.tunes){const e=d.tunes[k];if(e&&typeof e.abc==='string'){W.lib[k]={abc:e.abc,hand:e.hand||{},spot:e.spot||{}};n++;}}
+  const tu=d.tuning;
+  if(tu&&Array.isArray(tu.treble)&&Array.isArray(tu.bass)&&tu.treble.length===16&&tu.bass.length===16){T=tu.treble.slice();B=tu.bass.slice();save();}
+  const k=W.curKey&&W.lib[W.curKey]?W.curKey:Object.keys(W.lib).sort()[0];W.curKey=null;
+  const e=W.lib[k];W.curKey=k;W.abc=e.abc;W.hand=e.hand||{};W.spot=e.spot||{};loadTune();
+  bkMsg.textContent=`Restored ${n} tune${n===1?'':'s'}${tu?' and the tuning':''}.`;
+};
 
 function setMode(m){
   mode=m;try{localStorage.setItem('c9-mode',m)}catch(e){}

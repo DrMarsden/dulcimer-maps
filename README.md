@@ -54,7 +54,7 @@ Tunes come in as [ABC notation](https://abcnotation.com/), the plain-text format
 
 ### How hands and spots are chosen
 
-Most notes can be struck in two or three places. For each note, the page chooses the spot that keeps each hand's moves short and keeps the hands from crossing. It weighs the whole tune at once, using a Viterbi search over every possible placement. The result is a sensible first draft, not a rule. **Switch hand** and **Use the other spot** change any note, and the changes apply to both passes of a repeat.
+Most notes can be struck in two or three places. For each note, the page chooses the spot that keeps each hand's moves short and keeps the hands from crossing. It weighs the whole tune at once, using a Viterbi search over every possible placement. The search keeps track of where each hand last struck, so travel and crossing are judged correctly even when one hand plays several notes in a row. Harmony notes are placed in the same search. The result is a sensible first draft, not a rule. **Switch hand** and **Use the other spot** change any note, and the changes apply to both passes of a repeat.
 
 Two alternation schemes are offered:
 
@@ -65,7 +65,7 @@ The lead hand can be right or left. The whole tune can be moved up or down an oc
 
 ### Backup
 
-The **Backup** part follows chord symbols written in the ABC (`"G"`, `"D7"`, `"Em"`). When a tune has none, the page suggests a chord for each half bar from the melody notes. It favors the home chord and the chords on the fourth and fifth, and keeps a chord when the melody allows. Two styles are available:
+The **Backup** part follows chord symbols written in the ABC (`"G"`, `"D7"`, `"Em"`, `"Gmaj7"`, `"G/B"`). A seventh chord puts its seventh into the pattern, and a slash chord puts its named note in the bass. When a tune has none, the page suggests a chord for each half bar from the melody notes. It favors the home chord and the chords on the fourth and fifth, and keeps a chord when the melody allows. Two styles are available:
 
 - **Bass and chord:** a bass note on the beat with the right hand, and a two-note chord off the beat. Waltzes come out boom-chick-chick, and jigs get bass on the beat with the chord on the third eighth.
 - **Shed rolls:** root, third, fifth and octave in running eighth notes.
@@ -83,18 +83,20 @@ The backup is placed and hammered by the same method as the melody, and every pr
 - **Click, count-in, and mute.** A metronome click on the beats, a count-in bar, and an option to mute the tune and play against the click alone.
 - **Speed up each loop.** Raise the tempo by a set amount on each pass of a loop, up to a ceiling.
 - **Chord shapes under the tune.** Outline the triangle and shed for the current chord near the hands.
-- **My tunes.** Every loaded tune is kept in a list along with its hammering changes, in that browser.
+- **My tunes.** Every loaded tune is kept in a list along with its hammering changes, in that browser. Pasting a collection with several `X:` entries adds each tune separately, and settings that share a title are numbered.
+- **Back up or restore.** The whole list, with hammering changes and the tuning, can be copied out as text and pasted back in later or on another device.
 
 ## What the ABC reader handles
 
 It handles the parts of ABC that ordinary fiddle tunes use:
 
 - key signatures and modes, and accidentals that carry through the bar;
-- note lengths, broken rhythm (`>` and `<`), triplets and other tuplets, and ties;
+- note lengths, broken rhythm (`>` and `<`), triplets and other tuplets, and ties, including ties across bar lines;
 - rests;
 - repeats and first and second endings, which are written out in order;
 - pickup bars, which are counted from the end of the bar so the hands fall correctly;
-- chord symbols in quotes.
+- chord symbols in quotes: major, minor, diminished, seventh, major seventh and minor seventh chords, and slash chords;
+- collections of several tunes, each starting with `X:`.
 
 Grace notes, decorations and ornaments are skipped. Where the music has a chord (`[GBd]`), the walkthrough takes its top note. Tunes written in more than one voice are not supported.
 
@@ -104,12 +106,14 @@ Grace notes, decorations and ornaments are skipped. Where the music has a chord 
 - **Suggested chords are suggestions.** They are worked out from the melody notes in each half bar. A few will be arguable, and chord symbols in the ABC override them.
 - **The sound is synthesized.** It is close enough to check notes and timing, but it is not a recorded dulcimer, and it does not model dampers or sympathetic ringing.
 - **No listening.** The page does not hear the player.
+- **Saved work lives in one browser.** Use **Back up or restore my tunes** to keep a copy elsewhere.
+- **Phones.** The instrument diagram needs about 640 pixels of width, so on a phone it scrolls sideways. It is designed for tablets and larger screens.
 
 ## Technical notes
 
 - Everything is in a single `index.html`: inline CSS and JavaScript, with no build step. [abcjs](https://www.abcjs.net/) 6.4.4 draws the notation, and its note elements are mapped back to the walkthrough by character position.
 - The tuning is two arrays near the top of the script, `DEF_T` (treble, right side) and `DEF_B` (bass), from the front of the instrument to the back. Changing those adapts the page to a different instrument.
-- Placement is a dynamic-programming search over every candidate spot for every note. The state is the spots of the last two notes, which is enough to know where each hand is. The costs are hand travel, crossing, and a small preference for the treble in melodies.
+- Placement is a dynamic-programming search over every candidate spot for every note, and for every pairing of a note with its harmony note. The state is the spot where each hand last struck. The costs are hand travel, crossing, and a small preference for the treble in melodies.
 - Playback schedules notes and clicks on the Web Audio clock a fifth of a second ahead, so timing holds steady at any tempo.
 - The tuning, settings, and tune list are kept in `localStorage`. The page works the same without it.
 
